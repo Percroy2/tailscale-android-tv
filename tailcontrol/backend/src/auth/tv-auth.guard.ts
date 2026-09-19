@@ -7,6 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import type { Request } from 'express';
+import { PrismaService } from '../common/prisma/prisma.service.js';
 import type { TvAccessPayload } from './token.service.js';
 
 @Injectable()
@@ -14,6 +15,7 @@ export class TvAuthGuard implements CanActivate {
   constructor(
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
+    private readonly prisma: PrismaService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -31,9 +33,22 @@ export class TvAuthGuard implements CanActivate {
       if (payload.type !== 'tv_access') {
         throw new UnauthorizedException('Permissions insuffisantes');
       }
+
+      const device = await this.prisma.tvDevice.findUnique({
+        where: { id: payload.tvDeviceId },
+        select: { revokedAt: true },
+      });
+
+      if (!device || device.revokedAt) {
+        throw new UnauthorizedException('Session révoquée');
+      }
+
       request.tvAuth = payload;
       return true;
-    } catch {
+    } catch (error) {
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
       throw new UnauthorizedException('Session expirée');
     }
   }

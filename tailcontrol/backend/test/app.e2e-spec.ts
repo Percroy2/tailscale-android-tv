@@ -252,4 +252,76 @@ describe('TailControl API (e2e)', () => {
         expect(body.message?.code ?? body.code).toBe('TAILSCALE_OAUTH_FAILED');
       });
   });
+
+  it('révocation TV : accès API et refresh bloqués immédiatement', async () => {
+    const email = `revoke-e2e-${Date.now()}@tailcontrol.test`;
+    await request(app.getHttpServer())
+      .post('/api/v1/auth/register')
+      .send({ email, password: 'TestPass123!', displayName: 'Revoke E2E' })
+      .expect(201);
+
+    const login = await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({ email, password: 'TestPass123!' })
+      .expect(201);
+
+    const portalToken = login.body.accessToken as string;
+
+    const tailnet = await request(app.getHttpServer())
+      .post('/api/v1/tailnets')
+      .set('Authorization', `Bearer ${portalToken}`)
+      .send({
+        name: `revoke-${Date.now()}`,
+        displayName: 'Revoke Tailnet',
+      })
+      .expect(201);
+
+    const pairing = await request(app.getHttpServer())
+      .post('/api/v1/pairing')
+      .send({ installationId: `revoke-${Date.now()}`, deviceName: 'Revoke TV' })
+      .expect((response) => {
+        expect([200, 201]).toContain(response.status);
+      });
+
+    const { code } = pairing.body as { code: string };
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/pairing/${encodeURIComponent(code)}/authorize`)
+      .set('Authorization', `Bearer ${portalToken}`)
+      .send({
+        tailnetId: tailnet.body.id,
+        profile: 'ADMIN',
+        deviceName: 'Revoke TV',
+      })
+      .expect(201);
+
+    const status = await request(app.getHttpServer())
+      .get(`/api/v1/pairing/${pairing.body.pairingId}`)
+      .expect(200);
+
+    const tvAccess = status.body.tokens.accessToken as string;
+    const tvRefresh = status.body.tokens.refreshToken as string;
+    const tvDeviceId = status.body.device.id as string;
+
+    await request(app.getHttpServer())
+      .get('/api/v1/alerts')
+      .set('Authorization', `Bearer ${tvAccess}`)
+      .expect(200);
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/tvs/${tvDeviceId}/revoke`)
+      .query({ tailnetId: tailnet.body.id })
+      .set('Authorization', `Bearer ${portalToken}`)
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .get('/api/v1/alerts')
+      .set('Authorization', `Bearer ${tvAccess}`)
+      .expect(401);
+
+    await request(app.getHttpServer())
+      .post('/api/v1/auth/refresh')
+      .send({ refreshToken: tvRefresh })
+      .expect(401);
+  });
 });

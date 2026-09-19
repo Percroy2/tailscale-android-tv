@@ -9,6 +9,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import type { Server, Socket } from 'socket.io';
 import type { TvAccessPayload } from '../auth/token.service.js';
+import { PrismaService } from '../common/prisma/prisma.service.js';
 
 @WebSocketGateway({
   cors: { origin: true },
@@ -21,6 +22,7 @@ export class EventsGateway implements OnGatewayConnection {
   constructor(
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
+    private readonly prisma: PrismaService,
   ) {}
 
   async handleConnection(client: Socket): Promise<void> {
@@ -41,6 +43,18 @@ export class EventsGateway implements OnGatewayConnection {
         client.disconnect(true);
         return;
       }
+
+      const device = await this.prisma.tvDevice.findUnique({
+        where: { id: payload.tvDeviceId },
+        select: { revokedAt: true },
+      });
+
+      if (!device || device.revokedAt) {
+        client.emit('session_revoked', { at: new Date().toISOString() });
+        client.disconnect(true);
+        return;
+      }
+
       client.data.tvAuth = payload;
       client.join(`tailnet:${payload.tailnetId}`);
       client.join(`tv:${payload.tvDeviceId}`);

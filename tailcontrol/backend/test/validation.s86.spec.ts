@@ -240,6 +240,7 @@ const CRITERIA: Array<{
     name: 'Révocation immédiate WebSocket',
     check: () =>
       fileContains('backend/src/websocket/events.gateway.ts', 'session_revoked') &&
+      fileContains('backend/src/auth/tv-auth.guard.ts', 'revokedAt') &&
       fileContains('android-tv/app/src/main/java/fr/percroy/tailcontrol/MainActivity.kt', 'SessionEvent.Revoked') &&
       fileContains(
         'android-tv/data/src/main/java/fr/percroy/tailcontrol/data/websocket/RefreshNotifier.kt',
