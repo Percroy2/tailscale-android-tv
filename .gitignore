@@ -1,27 +1,29 @@
-# Gradle
+# Node
+node_modules/
+dist/
+coverage/
+
+# Gradle / Android
 .gradle/
 build/
 **/build/
+local.properties
+.android-sdk/
+*.apk
+*.aab
 
 # Android Studio / IntelliJ
 .idea/
 *.iml
 *.ipr
 *.iws
-local.properties
 
-# Kotlin
+# Kotlin / Java
 *.class
-*.jar
-*.war
-*.nar
-*.ear
-*.zip
-*.tar.gz
-*.rar
 
 # Logs
 *.log
+npm-debug.log*
 
 # OS
 .DS_Store
@@ -32,3 +34,10 @@ Thumbs.db
 *.jks
 .env
 .env.*
+!.env.example
+
+# Prisma agent sync artifacts
+**/.agents/
+**/.claude/
+**/.cursor/skills/
+**/.devin/

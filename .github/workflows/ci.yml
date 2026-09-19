@@ -1,0 +1,128 @@
+name: TailControl CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: tailcontrol
+          POSTGRES_PASSWORD: tailcontrol
+          POSTGRES_DB: tailcontrol
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U tailcontrol -d tailcontrol"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6380:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    defaults:
+      run:
+        working-directory: tailcontrol/backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tailcontrol/backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prisma migrate
+        env:
+          DATABASE_URL: postgresql://tailcontrol:tailcontrol@localhost:5433/tailcontrol
+        run: npx prisma migrate deploy
+
+      - name: Unit tests + validation §86
+        run: npm test
+
+      - name: E2E API tests
+        env:
+          DATABASE_URL: postgresql://tailcontrol:tailcontrol@localhost:5433/tailcontrol
+          REDIS_URL: redis://localhost:6380
+          JWT_ACCESS_SECRET: ci-access-secret
+          JWT_REFRESH_SECRET: ci-refresh-secret
+          MASTER_ENCRYPTION_KEY: ci-master-key-for-tests-only!!
+        run: npm run test:e2e
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tailcontrol/web
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tailcontrol/web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+  android:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tailcontrol/android-tv
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Assemble debug APK
+        run: ./gradlew assembleDebug --no-daemon
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build stack images
+        working-directory: tailcontrol/infrastructure/docker
+        run: docker compose build
+
+      - name: Start stack
+        working-directory: tailcontrol/infrastructure/docker
+        run: docker compose up -d
+
+      - name: Smoke test API
+        run: node tailcontrol/infrastructure/scripts/smoke-stack.mjs
+
+      - name: Smoke test portail (proxy nginx)
+        env:
+          API_BASE: http://localhost:8080
+        run: node tailcontrol/infrastructure/scripts/smoke-stack.mjs

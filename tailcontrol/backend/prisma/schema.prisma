@@ -1,0 +1,235 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum PermissionProfile {
+  READ_ONLY
+  OPERATOR
+  ADMIN
+  CUSTOM
+}
+
+enum AuditResult {
+  SUCCESS
+  FAILURE
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  displayName  String
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  auditLogs AuditLog[]
+}
+
+model Tailnet {
+  id          String   @id @default(cuid())
+  name        String
+  displayName String
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  credentials   TailscaleCredential[]
+  permissions   TvPermission[]
+  auditLogs     AuditLog[]
+  alerts        Alert[]
+  notifications Notification[]
+  favorites     DeviceFavorite[]
+  groups        DeviceGroup[]
+}
+
+model TailscaleCredential {
+  id                    String    @id @default(cuid())
+  tailnetId             String
+  clientId              String
+  encryptedClientSecret String
+  scopes                String[]
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  lastUsedAt            DateTime?
+  revokedAt             DateTime?
+
+  tailnet Tailnet @relation(fields: [tailnetId], references: [id], onDelete: Cascade)
+
+  @@index([tailnetId])
+}
+
+model TvDevice {
+  id               String    @id @default(cuid())
+  name             String
+  installationId   String    @unique
+  manufacturer     String?
+  model            String?
+  platform         String?
+  platformVersion  String?
+  appVersion       String?
+  refreshTokenHash String?
+  pairedAt         DateTime?
+  lastSeenAt       DateTime?
+  revokedAt        DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  permissions     TvPermission[]
+  pairingSessions PairingSession[]
+  auditLogs       AuditLog[]
+  alerts          Alert[]
+  notifications   Notification[]
+
+  @@index([installationId])
+}
+
+model TvPermission {
+  id               String            @id @default(cuid())
+  tvDeviceId       String
+  tailnetId        String
+  profile          PermissionProfile @default(READ_ONLY)
+  canReadDevices   Boolean           @default(true)
+  canModifyDevices Boolean           @default(false)
+  canDeleteDevices Boolean           @default(false)
+  canManageRoutes  Boolean           @default(false)
+  canManageDns     Boolean           @default(false)
+  canManageUsers   Boolean           @default(false)
+  canManageKeys    Boolean           @default(false)
+  canManagePolicy  Boolean           @default(false)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  tvDevice TvDevice @relation(fields: [tvDeviceId], references: [id], onDelete: Cascade)
+  tailnet  Tailnet  @relation(fields: [tailnetId], references: [id], onDelete: Cascade)
+
+  @@unique([tvDeviceId, tailnetId])
+}
+
+model PairingSession {
+  id              String    @id @default(cuid())
+  pairingCodeHash String
+  tvDeviceId      String?
+  createdAt       DateTime  @default(now())
+  expiresAt       DateTime
+  usedAt          DateTime?
+
+  tvDevice TvDevice? @relation(fields: [tvDeviceId], references: [id], onDelete: SetNull)
+
+  @@index([pairingCodeHash])
+  @@index([expiresAt])
+}
+
+model DeviceGroup {
+  id        String   @id @default(cuid())
+  tailnetId String
+  name      String
+  deviceIds String[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tailnet Tailnet @relation(fields: [tailnetId], references: [id], onDelete: Cascade)
+
+  @@unique([tailnetId, name])
+}
+
+model DeviceFavorite {
+  id         String   @id @default(cuid())
+  tailnetId  String
+  deviceId   String
+  deviceName String
+  createdAt  DateTime @default(now())
+
+  tailnet Tailnet @relation(fields: [tailnetId], references: [id], onDelete: Cascade)
+
+  @@unique([tailnetId, deviceId])
+}
+
+model Monitor {
+  id        String   @id @default(cuid())
+  tailnetId String
+  name      String
+  type      String
+  target    String
+  config    Json?
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  results MonitorResult[]
+}
+
+model MonitorResult {
+  id        String   @id @default(cuid())
+  monitorId String
+  status    String
+  latencyMs Int?
+  details   Json?
+  checkedAt DateTime @default(now())
+
+  monitor Monitor @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+
+  @@index([monitorId, checkedAt])
+}
+
+model Alert {
+  id         String    @id @default(cuid())
+  tailnetId  String
+  tvDeviceId String?
+  type       String
+  title      String
+  message    String
+  readAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  tailnet  Tailnet   @relation(fields: [tailnetId], references: [id], onDelete: Cascade)
+  tvDevice TvDevice? @relation(fields: [tvDeviceId], references: [id], onDelete: SetNull)
+
+  @@index([tailnetId, createdAt])
+}
+
+model Notification {
+  id         String    @id @default(cuid())
+  tailnetId  String
+  tvDeviceId String?
+  type       String
+  payload    Json
+  readAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  tailnet  Tailnet   @relation(fields: [tailnetId], references: [id], onDelete: Cascade)
+  tvDevice TvDevice? @relation(fields: [tvDeviceId], references: [id], onDelete: SetNull)
+}
+
+model AuditLog {
+  id         String      @id @default(cuid())
+  userId     String?
+  tvDeviceId String?
+  tailnetId  String?
+  action     String
+  targetType String?
+  targetId   String?
+  payload    Json?
+  result     AuditResult
+  error      String?
+  ipAddress  String?
+  createdAt  DateTime    @default(now())
+
+  user     User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  tvDevice TvDevice? @relation(fields: [tvDeviceId], references: [id], onDelete: SetNull)
+  tailnet  Tailnet?  @relation(fields: [tailnetId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([tailnetId, createdAt])
+}
+
+model Setting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Json
+  updatedAt DateTime @updatedAt
+}

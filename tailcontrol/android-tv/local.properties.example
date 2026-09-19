@@ -1,0 +1,9 @@
+# Copiez ce fichier vers local.properties et ajustez sdk.dir.
+# Sous Windows (Android Studio par défaut) :
+sdk.dir=C\:\\Users\\VOTRE_UTILISATEUR\\AppData\\Local\\Android\\Sdk
+# Alternative : définir la variable d'environnement ANDROID_HOME.
+
+# URL API TailControl (debug). Exemples :
+# Émulateur Android TV → http://10.0.2.2:3000
+# Fire TV / Shield sur le LAN → http://192.168.x.x:3000
+tailcontrol.api.baseUrl=http://10.0.2.2:3000

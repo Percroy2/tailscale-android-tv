@@ -1,0 +1,18 @@
+{
+  "name": "tailcontrol",
+  "version": "1.0.0",
+  "private": true,
+  "description": "TailControl TV v1.0 — monorepo Android TV, API, portail, Docker",
+  "scripts": {
+    "test": "npm --prefix backend test",
+    "test:e2e": "npm --prefix backend run test:e2e",
+    "test:all": "npm run test && npm run test:e2e",
+    "verify": "node scripts/verify-v1.mjs",
+    "build:android": "node scripts/build-android.mjs",
+    "build:web": "npm --prefix web run build",
+    "smoke": "node infrastructure/scripts/smoke-stack.mjs",
+    "docker:up": "docker compose -f infrastructure/docker/docker-compose.yml up -d",
+    "docker:down": "docker compose -f infrastructure/docker/docker-compose.yml down",
+    "docker:build": "docker compose -f infrastructure/docker/docker-compose.yml build"
+  }
+}
