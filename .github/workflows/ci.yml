@@ -115,7 +115,9 @@ jobs:
           echo "sdk.dir=$SDK_ROOT" > local.properties
 
       - name: Assemble debug APK
-        run: ./gradlew assembleDebug --no-daemon
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
 
   docker:
     runs-on: ubuntu-latest
