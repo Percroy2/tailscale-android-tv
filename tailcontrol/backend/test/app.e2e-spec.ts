@@ -324,4 +324,159 @@ describe('TailControl API (e2e)', () => {
       .send({ refreshToken: tvRefresh })
       .expect(401);
   });
+
+  it('RBAC : profil READ_ONLY sans permissions admin dans /tv/profile', async () => {
+    const email = `rbac-e2e-${Date.now()}@tailcontrol.test`;
+    await request(app.getHttpServer())
+      .post('/api/v1/auth/register')
+      .send({ email, password: 'TestPass123!', displayName: 'RBAC E2E' })
+      .expect(201);
+
+    const login = await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({ email, password: 'TestPass123!' })
+      .expect(201);
+
+    const portalToken = login.body.accessToken as string;
+
+    const tailnet = await request(app.getHttpServer())
+      .post('/api/v1/tailnets')
+      .set('Authorization', `Bearer ${portalToken}`)
+      .send({
+        name: `rbac-${Date.now()}`,
+        displayName: 'RBAC Tailnet',
+      })
+      .expect(201);
+
+    const pairing = await request(app.getHttpServer())
+      .post('/api/v1/pairing')
+      .send({ installationId: `rbac-${Date.now()}`, deviceName: 'RBAC TV' })
+      .expect((response) => {
+        expect([200, 201]).toContain(response.status);
+      });
+
+    await request(app.getHttpServer())
+      .post(
+        `/api/v1/pairing/${encodeURIComponent(pairing.body.code)}/authorize`,
+      )
+      .set('Authorization', `Bearer ${portalToken}`)
+      .send({
+        tailnetId: tailnet.body.id,
+        profile: 'READ_ONLY',
+        deviceName: 'RBAC TV',
+      })
+      .expect(201);
+
+    const status = await request(app.getHttpServer())
+      .get(`/api/v1/pairing/${pairing.body.pairingId}`)
+      .expect(200);
+
+    const tvAccess = status.body.tokens.accessToken as string;
+
+    await request(app.getHttpServer())
+      .get('/api/v1/tv/profile')
+      .set('Authorization', `Bearer ${tvAccess}`)
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body.profile).toBe('READ_ONLY');
+        expect(body.permissions.canReadDevices).toBe(true);
+        expect(body.permissions.canManageDns).toBe(false);
+        expect(body.permissions.canManageKeys).toBe(false);
+        expect(body.permissions.canManagePolicy).toBe(false);
+      });
+  });
+
+  it('OAuth mock : dashboard Tailscale via token client_credentials', async () => {
+    const originalFetch = globalThis.fetch;
+    const email = `dash-e2e-${Date.now()}@tailcontrol.test`;
+
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const href =
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
+
+      if (href.includes('/oauth/token')) {
+        return new Response(
+          JSON.stringify({
+            access_token: 'mock-tailscale-token',
+            token_type: 'Bearer',
+            expires_in: 3600,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+
+      if (href.includes('/devices')) {
+        return new Response(
+          JSON.stringify({
+            devices: [
+              {
+                id: 'device-mock-1',
+                name: 'server.tailnet.ts.net',
+                hostname: 'server',
+                os: 'linux',
+                user: 'admin@example.com',
+                addresses: ['100.64.0.2'],
+                authorized: true,
+                lastSeen: new Date().toISOString(),
+                advertisedRoutes: [],
+                enabledRoutes: [],
+                tags: [],
+              },
+            ],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+
+      return originalFetch(input, init);
+    }) as typeof fetch;
+
+    try {
+      await request(app.getHttpServer())
+        .post('/api/v1/auth/register')
+        .send({ email, password: 'TestPass123!', displayName: 'Dash E2E' })
+        .expect(201);
+
+      const login = await request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .send({ email, password: 'TestPass123!' })
+        .expect(201);
+
+      const portalToken = login.body.accessToken as string;
+
+      const tailnet = await request(app.getHttpServer())
+        .post('/api/v1/tailnets')
+        .set('Authorization', `Bearer ${portalToken}`)
+        .send({
+          name: `dash-${Date.now()}`,
+          displayName: 'Dash Tailnet',
+        })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .post(`/api/v1/tailnets/${tailnet.body.id}/credentials`)
+        .set('Authorization', `Bearer ${portalToken}`)
+        .send({
+          clientId: 'kMockClient',
+          clientSecret: 'tskey-client-mock-secret',
+        })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .get(`/api/v1/dashboard/portal?tailnetId=${tailnet.body.id}`)
+        .set('Authorization', `Bearer ${portalToken}`)
+        .expect(200)
+        .expect(({ body }) => {
+          expect(body.connected).toBe(true);
+          expect(body.stats.devicesTotal).toBe(1);
+          expect(body.tailnet.id).toBe(tailnet.body.id);
+        });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });
