@@ -3,6 +3,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module.js';
+import { PrismaService } from '../src/common/prisma/prisma.service.js';
 
 describe('TailControl API (e2e)', () => {
   let app: INestApplication<App>;
@@ -192,6 +193,63 @@ describe('TailControl API (e2e)', () => {
       .expect(200)
       .expect(({ body }) => {
         expect(body.items).toBeDefined();
+      });
+  });
+
+  it('OAuth Tailscale : credentials chiffrés AES-256-GCM en base', async () => {
+    const email = `oauth-e2e-${Date.now()}@tailcontrol.test`;
+    await request(app.getHttpServer())
+      .post('/api/v1/auth/register')
+      .send({ email, password: 'TestPass123!', displayName: 'OAuth E2E' })
+      .expect(201);
+
+    const login = await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({ email, password: 'TestPass123!' })
+      .expect(201);
+
+    const portalToken = login.body.accessToken as string;
+
+    const tailnet = await request(app.getHttpServer())
+      .post('/api/v1/tailnets')
+      .set('Authorization', `Bearer ${portalToken}`)
+      .send({
+        name: `oauth-${Date.now()}`,
+        displayName: 'OAuth Tailnet',
+      })
+      .expect(201);
+
+    const clientSecret = `tskey-client-secret-${Date.now()}`;
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/tailnets/${tailnet.body.id}/credentials`)
+      .set('Authorization', `Bearer ${portalToken}`)
+      .send({
+        clientId: 'kTestClientId',
+        clientSecret,
+        scopes: ['devices:core'],
+      })
+      .expect(201)
+      .expect(({ body }) => {
+        expect(body.clientId).toBe('kTestClientId');
+        expect(body.clientSecret).toBeUndefined();
+      });
+
+    const prisma = app.get(PrismaService);
+    const stored = await prisma.tailscaleCredential.findFirst({
+      where: { tailnetId: tailnet.body.id, revokedAt: null },
+    });
+
+    expect(stored).toBeDefined();
+    expect(stored!.encryptedClientSecret).not.toContain(clientSecret);
+    expect(stored!.encryptedClientSecret).not.toBe(clientSecret);
+
+    await request(app.getHttpServer())
+      .get(`/api/v1/dashboard/portal?tailnetId=${tailnet.body.id}`)
+      .set('Authorization', `Bearer ${portalToken}`)
+      .expect(400)
+      .expect(({ body }) => {
+        expect(body.message?.code ?? body.code).toBe('TAILSCALE_OAUTH_FAILED');
       });
   });
 });

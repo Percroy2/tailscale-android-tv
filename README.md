@@ -86,6 +86,26 @@ Ou ouvrir le dossier dans Android Studio, synchroniser Gradle, lancer sur un ém
 
 Fonctionnalités clés : jumelage QR/code, refresh token automatique sur 401, cache Room offline, PIN admin, révocation WebSocket immédiate, switch multi-tailnet.
 
+#### Fire TV / Shield (sideload)
+
+```bash
+cd tailcontrol
+npm run build:android
+# APK : android-tv/app/build/outputs/apk/debug/app-debug.apk
+
+adb connect <IP_FIRE_TV>:5555
+adb install -r android-tv/app/build/outputs/apk/debug/app-debug.apk
+```
+
+Dans `local.properties`, `tailcontrol.api.baseUrl` doit pointer vers l'IP LAN du serveur TailControl (ex. `http://192.168.1.10:3000`), pas `localhost`.
+
+#### OAuth Tailscale (tailnet réel)
+
+1. Créer un OAuth client sur [Tailscale Admin → OAuth clients](https://login.tailscale.com/admin/settings/oauth)
+2. Démarrer la stack (`npm run docker:up`) et ouvrir le portail `http://localhost:8080`
+3. Créer un compte, un tailnet, puis **Paramètres → Credentials Tailscale**
+4. Vérifier le dashboard (machines, routes, DNS…) — le secret reste chiffré côté API
+
 ### Agent de supervision
 
 ```bash
@@ -138,7 +158,8 @@ API_BASE=http://localhost:8080 node tailcontrol/infrastructure/scripts/smoke-sta
 | Android TV | Navigation complète, APK debug buildable, Room cache, PIN, QR, refresh token |
 | Infrastructure | Docker Compose (API + Web + Postgres + Redis), smoke test 14 étapes |
 | CI | Backend + Web + Android + Docker smoke (`.github/workflows/ci.yml`) |
-| Validation | `npm run verify` — §86 (34/34) + 51 tests + smoke |
+| Validation | `npm run verify` — §86 (34/34) + 55 tests + smoke |
+| Matériel | Checklist manuelle : `node tailcontrol/scripts/validation-manual.mjs` |
 
 ## Dépôt
 

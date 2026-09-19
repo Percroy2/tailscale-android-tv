@@ -8,6 +8,7 @@
     "test:e2e": "npm --prefix backend run test:e2e",
     "test:all": "npm run test && npm run test:e2e",
     "verify": "node scripts/verify-v1.mjs",
+    "validate:manual": "node scripts/validation-manual.mjs",
     "build:android": "node scripts/build-android.mjs",
     "build:web": "npm --prefix web run build",
     "smoke": "node infrastructure/scripts/smoke-stack.mjs",

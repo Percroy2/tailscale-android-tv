@@ -95,7 +95,8 @@ const CRITERIA: Array<{
     name: 'OAuth Tailscale chiffré AES-256-GCM',
     check: () =>
       pathExists('backend/src/common/crypto/encryption.service.ts') &&
-      fileContains('backend/src/common/crypto/encryption.service.ts', 'aes-256-gcm'),
+      fileContains('backend/src/common/crypto/encryption.service.ts', 'aes-256-gcm') &&
+      pathExists('backend/test/encryption.service.spec.ts'),
   },
   {
     id: 12,
