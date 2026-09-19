@@ -547,4 +547,93 @@ describe('TailControl API (e2e)', () => {
     expect(run.body.result.status).toBe('up');
     expect(run.body.monitor.type).toBe('port');
   });
+
+  it('agents : enregistrement portail et liste depuis TV', async () => {
+    const email = `agent-e2e-${Date.now()}@tailcontrol.test`;
+    await request(app.getHttpServer())
+      .post('/api/v1/auth/register')
+      .send({ email, password: 'TestPass123!', displayName: 'Agent E2E' })
+      .expect(201);
+
+    const login = await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({ email, password: 'TestPass123!' })
+      .expect(201);
+
+    const portalToken = login.body.accessToken as string;
+
+    const tailnet = await request(app.getHttpServer())
+      .post('/api/v1/tailnets')
+      .set('Authorization', `Bearer ${portalToken}`)
+      .send({
+        name: `agent-${Date.now()}`,
+        displayName: 'Agent Tailnet',
+      })
+      .expect(201);
+
+    const pairing = await request(app.getHttpServer())
+      .post('/api/v1/pairing')
+      .send({ installationId: `agent-${Date.now()}`, deviceName: 'Agent TV' })
+      .expect((response) => {
+        expect([200, 201]).toContain(response.status);
+      });
+
+    await request(app.getHttpServer())
+      .post(
+        `/api/v1/pairing/${encodeURIComponent(pairing.body.code)}/authorize`,
+      )
+      .set('Authorization', `Bearer ${portalToken}`)
+      .send({
+        tailnetId: tailnet.body.id,
+        profile: 'ADMIN',
+        deviceName: 'Agent TV',
+      })
+      .expect(201);
+
+    const status = await request(app.getHttpServer())
+      .get(`/api/v1/pairing/${pairing.body.pairingId}`)
+      .expect(200);
+
+    const tvAccess = status.body.tokens.accessToken as string;
+
+    const agent = await request(app.getHttpServer())
+      .post(`/api/v1/agents/register?tailnetId=${tailnet.body.id}`)
+      .set('Authorization', `Bearer ${portalToken}`)
+      .send({
+        name: 'Agent LAN',
+        hostname: 'supervision.local',
+        capabilities: ['ping', 'wol'],
+      })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post(
+        `/api/v1/agents/${agent.body.id}/heartbeat?tailnetId=${tailnet.body.id}`,
+      )
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .get('/api/v1/agents/for-tv')
+      .set('Authorization', `Bearer ${tvAccess}`)
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body.agents).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              id: agent.body.id,
+              name: 'Agent LAN',
+              status: 'online',
+            }),
+          ]),
+        );
+      });
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/agents/${agent.body.id}/check`)
+      .set('Authorization', `Bearer ${tvAccess}`)
+      .expect(201)
+      .expect(({ body }) => {
+        expect(body.accepted).toBe(true);
+      });
+  });
 });

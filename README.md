@@ -158,7 +158,7 @@ API_BASE=http://localhost:8080 node tailcontrol/infrastructure/scripts/smoke-sta
 | Android TV | Navigation complète, APK debug buildable, Room cache, PIN, QR, refresh token |
 | Infrastructure | Docker Compose (API + Web + Postgres + Redis), smoke test 14 étapes |
 | CI | Backend + Web + Android + Docker smoke (`.github/workflows/ci.yml`) |
-| Validation | `npm run verify` — §86 (34/34) + 63 tests + smoke |
+| Validation | `npm run verify` — §86 (34/34) + 64 tests + smoke |
 | Matériel | Checklist manuelle : `node tailcontrol/scripts/validation-manual.mjs` |
 
 ## Dépôt
