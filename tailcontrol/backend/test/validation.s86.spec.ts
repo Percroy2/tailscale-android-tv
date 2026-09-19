@@ -216,6 +216,7 @@ const CRITERIA: Array<{
     check: () =>
       pathExists('backend/src/monitoring/monitoring.service.ts') &&
       fileContains('backend/src/monitoring/monitoring.service.ts', 'sendWakeOnLan') &&
+      pathExists('backend/test/monitoring.service.spec.ts') &&
       pathExists(
         'android-tv/presentation/src/main/java/fr/percroy/tailcontrol/presentation/monitoring/MonitoringScreen.kt',
       ),

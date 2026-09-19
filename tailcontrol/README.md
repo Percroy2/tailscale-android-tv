@@ -15,7 +15,7 @@ Console d'administration Tailscale pour **Android TV / Fire TV**.
 npm run docker:up    # Stack complète (API :3000, portail :8080)
 npm run verify       # artefacts V1 + test:all (§86 + E2E)
 npm run build:android # APK debug (SDK + local.properties requis)
-npm run test:all     # 47 tests unitaires + 12 E2E + §86
+npm run test:all     # 50 tests unitaires + 13 E2E + §86
 npm run smoke        # Parcours jumelage bout-en-bout
 npm run build:web
 ```

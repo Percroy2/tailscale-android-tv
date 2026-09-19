@@ -479,4 +479,72 @@ describe('TailControl API (e2e)', () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  it('supervision : création monitor port et exécution depuis TV', async () => {
+    const email = `mon-e2e-${Date.now()}@tailcontrol.test`;
+    await request(app.getHttpServer())
+      .post('/api/v1/auth/register')
+      .send({ email, password: 'TestPass123!', displayName: 'Mon E2E' })
+      .expect(201);
+
+    const login = await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({ email, password: 'TestPass123!' })
+      .expect(201);
+
+    const portalToken = login.body.accessToken as string;
+
+    const tailnet = await request(app.getHttpServer())
+      .post('/api/v1/tailnets')
+      .set('Authorization', `Bearer ${portalToken}`)
+      .send({
+        name: `mon-${Date.now()}`,
+        displayName: 'Mon Tailnet',
+      })
+      .expect(201);
+
+    const pairing = await request(app.getHttpServer())
+      .post('/api/v1/pairing')
+      .send({ installationId: `mon-${Date.now()}`, deviceName: 'Mon TV' })
+      .expect((response) => {
+        expect([200, 201]).toContain(response.status);
+      });
+
+    await request(app.getHttpServer())
+      .post(
+        `/api/v1/pairing/${encodeURIComponent(pairing.body.code)}/authorize`,
+      )
+      .set('Authorization', `Bearer ${portalToken}`)
+      .send({
+        tailnetId: tailnet.body.id,
+        profile: 'ADMIN',
+        deviceName: 'Mon TV',
+      })
+      .expect(201);
+
+    const status = await request(app.getHttpServer())
+      .get(`/api/v1/pairing/${pairing.body.pairingId}`)
+      .expect(200);
+
+    const tvAccess = status.body.tokens.accessToken as string;
+
+    const monitor = await request(app.getHttpServer())
+      .post(`/api/v1/monitoring/portal?tailnetId=${tailnet.body.id}`)
+      .set('Authorization', `Bearer ${portalToken}`)
+      .send({
+        name: 'Port Postgres',
+        type: 'port',
+        target: '127.0.0.1',
+        config: { port: 5433 },
+      })
+      .expect(201);
+
+    const run = await request(app.getHttpServer())
+      .post(`/api/v1/monitoring/${monitor.body.id}/run`)
+      .set('Authorization', `Bearer ${tvAccess}`)
+      .expect(201);
+
+    expect(run.body.result.status).toBe('up');
+    expect(run.body.monitor.type).toBe('port');
+  });
 });
